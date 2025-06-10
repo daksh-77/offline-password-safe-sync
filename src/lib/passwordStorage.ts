@@ -1,5 +1,5 @@
+
 import { EncryptionService, EncryptionKey } from './encryption';
-import { AadhaarDetails, AadhaarVerificationService } from './aadhaarVerification';
 
 export interface Password {
   id: string;
@@ -16,8 +16,6 @@ export interface Password {
 export interface PasswordVault {
   passwords: Password[];
   lastSync: number;
-  aadhaarData?: string; // Encrypted Aadhaar details for recovery
-  version: string;
 }
 
 export class PasswordStorageService {
@@ -52,30 +50,14 @@ export class PasswordStorageService {
       const encryptedData = localStorage.getItem(storageKey);
       
       if (!encryptedData) {
-        return { 
-          passwords: [], 
-          lastSync: Date.now(),
-          version: '1.0'
-        };
+        return { passwords: [], lastSync: Date.now() };
       }
       
       const decryptedData = EncryptionService.decrypt(encryptedData, encryptionKey);
-      const vault = JSON.parse(decryptedData);
-      
-      // Ensure vault has required properties
-      return {
-        passwords: vault.passwords || [],
-        lastSync: vault.lastSync || Date.now(),
-        aadhaarData: vault.aadhaarData,
-        version: vault.version || '1.0'
-      };
+      return JSON.parse(decryptedData);
     } catch (error) {
       console.error('Error decrypting vault:', error);
-      return { 
-        passwords: [], 
-        lastSync: Date.now(),
-        version: '1.0'
-      };
+      return { passwords: [], lastSync: Date.now() };
     }
   }
 
@@ -88,21 +70,6 @@ export class PasswordStorageService {
     } catch (error) {
       console.error('Error encrypting vault:', error);
     }
-  }
-
-  static saveAadhaarToVault(userId: string, aadhaarDetails: AadhaarDetails, encryptionKey: EncryptionKey): void {
-    const vault = this.getVault(userId, encryptionKey);
-    vault.aadhaarData = AadhaarVerificationService.encryptAadhaarDetails(aadhaarDetails);
-    vault.lastSync = Date.now();
-    this.saveVault(userId, vault, encryptionKey);
-  }
-
-  static getAadhaarFromVault(userId: string, encryptionKey: EncryptionKey): AadhaarDetails | null {
-    const vault = this.getVault(userId, encryptionKey);
-    if (vault.aadhaarData) {
-      return AadhaarVerificationService.decryptAadhaarDetails(vault.aadhaarData);
-    }
-    return null;
   }
 
   static exportVault(userId: string, encryptionKey: EncryptionKey): void {
@@ -128,22 +95,11 @@ export class PasswordStorageService {
       charset += special;
     }
     
-    // Ensure at least one character from each required set
     let password = '';
-    password += lowercase[Math.floor(Math.random() * lowercase.length)];
-    password += uppercase[Math.floor(Math.random() * uppercase.length)];
-    password += numbers[Math.floor(Math.random() * numbers.length)];
-    
-    if (includeSpecial) {
-      password += special[Math.floor(Math.random() * special.length)];
-    }
-    
-    // Fill the rest randomly
-    for (let i = password.length; i < length; i++) {
+    for (let i = 0; i < length; i++) {
       password += charset.charAt(Math.floor(Math.random() * charset.length));
     }
     
-    // Shuffle the password
-    return password.split('').sort(() => Math.random() - 0.5).join('');
+    return password;
   }
 }
