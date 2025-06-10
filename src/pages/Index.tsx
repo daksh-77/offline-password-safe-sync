@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from '@/components/AuthProvider';
 import LoginScreen from '@/components/LoginScreen';
 import KeyDownloadDialog from '@/components/KeyDownloadDialog';
 import PasswordDashboard from '@/components/PasswordDashboard';
+import MobileLayout from '@/components/MobileLayout';
 import { EncryptionService, EncryptionKey } from '@/lib/encryption';
 
 const AppContent = () => {
@@ -29,39 +30,47 @@ const AppContent = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+      <MobileLayout>
+        <div className="flex items-center justify-center min-h-[50vh]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading...</p>
+          </div>
         </div>
-      </div>
+      </MobileLayout>
     );
   }
 
   if (!user) {
-    return <LoginScreen />;
+    return (
+      <MobileLayout>
+        <LoginScreen />
+      </MobileLayout>
+    );
   }
 
   if (!encryptionKey) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Setting up encryption...</p>
+      <MobileLayout>
+        <div className="flex items-center justify-center min-h-[50vh]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Setting up encryption...</p>
+          </div>
         </div>
-      </div>
+      </MobileLayout>
     );
   }
 
   return (
-    <>
+    <MobileLayout>
       <PasswordDashboard encryptionKey={encryptionKey} />
       <KeyDownloadDialog
         open={showKeyDownload}
         onClose={() => setShowKeyDownload(false)}
         encryptionKey={encryptionKey}
       />
-    </>
+    </MobileLayout>
   );
 };
 
