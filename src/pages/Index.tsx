@@ -1,32 +1,69 @@
 
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from '@/components/AuthProvider';
+import { ThemeProvider } from '@/contexts/ThemeContext';
 import LoginScreen from '@/components/LoginScreen';
 import KeyDownloadDialog from '@/components/KeyDownloadDialog';
 import PasswordDashboard from '@/components/PasswordDashboard';
+import ImportCreatePage from '@/components/ImportCreatePage';
+import AadhaarVerification from '@/components/AadhaarVerification';
+import SyncPage from '@/components/SyncPage';
+import LostKeyPage from '@/components/LostKeyPage';
 import MobileLayout from '@/components/MobileLayout';
 import { EncryptionService, EncryptionKey } from '@/lib/encryption';
+import { PasswordStorageService } from '@/lib/passwordStorage';
+import { AadhaarDetails } from '@/lib/aadhaarService';
+
+type AppState = 'dashboard' | 'import-create' | 'aadhaar-setup' | 'sync' | 'lost-key';
 
 const AppContent = () => {
   const { user, loading } = useAuth();
   const [encryptionKey, setEncryptionKey] = useState<EncryptionKey | null>(null);
   const [showKeyDownload, setShowKeyDownload] = useState(false);
+  const [appState, setAppState] = useState<AppState>('import-create');
+  const [isNewUser, setIsNewUser] = useState(false);
 
   useEffect(() => {
     if (user && !encryptionKey) {
       // Check if user already has a key in localStorage
       const savedKey = localStorage.getItem(`encryption_key_${user.uid}`);
-      if (savedKey) {
+      const savedVault = localStorage.getItem(`vault_${user.uid}`);
+      
+      if (savedKey && savedVault) {
         setEncryptionKey(JSON.parse(savedKey));
+        setAppState('dashboard');
       } else {
-        // Generate new key for first-time user
-        const newKey = EncryptionService.generateKey();
-        setEncryptionKey(newKey);
-        localStorage.setItem(`encryption_key_${user.uid}`, JSON.stringify(newKey));
-        setShowKeyDownload(true);
+        setAppState('import-create');
       }
     }
   }, [user, encryptionKey]);
+
+  const handleCreateNewVault = () => {
+    setIsNewUser(true);
+    setAppState('aadhaar-setup');
+  };
+
+  const handleAadhaarSetup = (aadhaarDetails: AadhaarDetails) => {
+    if (!user) return;
+
+    // Generate new encryption key
+    const newKey = EncryptionService.generateKey();
+    setEncryptionKey(newKey);
+    
+    // Save Aadhaar data to vault
+    PasswordStorageService.saveAadhaarToVault(user.uid, aadhaarDetails, user.email || '', newKey);
+    
+    // Save encryption key
+    localStorage.setItem(`encryption_key_${user.uid}`, JSON.stringify(newKey));
+    
+    setShowKeyDownload(true);
+    setAppState('dashboard');
+  };
+
+  const handleVaultLoaded = (key: EncryptionKey) => {
+    setEncryptionKey(key);
+    setAppState('dashboard');
+  };
 
   if (loading) {
     return (
@@ -49,6 +86,46 @@ const AppContent = () => {
     );
   }
 
+  if (appState === 'import-create') {
+    return (
+      <MobileLayout>
+        <ImportCreatePage
+          onVaultLoaded={handleVaultLoaded}
+          onCreateNew={handleCreateNewVault}
+        />
+      </MobileLayout>
+    );
+  }
+
+  if (appState === 'aadhaar-setup') {
+    return (
+      <AadhaarVerification
+        title="Setup Account Recovery"
+        description="Upload your Aadhaar for secure account recovery"
+        onVerificationComplete={handleAadhaarSetup}
+        onCancel={() => setAppState('import-create')}
+      />
+    );
+  }
+
+  if (appState === 'sync' && encryptionKey) {
+    return (
+      <SyncPage
+        encryptionKey={encryptionKey}
+        onBack={() => setAppState('dashboard')}
+      />
+    );
+  }
+
+  if (appState === 'lost-key') {
+    return (
+      <LostKeyPage
+        onBack={() => setAppState('dashboard')}
+        onKeyRecovered={() => setAppState('import-create')}
+      />
+    );
+  }
+
   if (!encryptionKey) {
     return (
       <MobileLayout>
@@ -64,7 +141,11 @@ const AppContent = () => {
 
   return (
     <MobileLayout>
-      <PasswordDashboard encryptionKey={encryptionKey} />
+      <PasswordDashboard 
+        encryptionKey={encryptionKey} 
+        onNavigateToSync={() => setAppState('sync')}
+        onNavigateToLostKey={() => setAppState('lost-key')}
+      />
       <KeyDownloadDialog
         open={showKeyDownload}
         onClose={() => setShowKeyDownload(false)}
@@ -76,9 +157,11 @@ const AppContent = () => {
 
 const Index = () => {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ThemeProvider>
   );
 };
 

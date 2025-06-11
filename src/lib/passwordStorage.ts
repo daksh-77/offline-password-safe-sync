@@ -1,5 +1,5 @@
-
 import { EncryptionService, EncryptionKey } from './encryption';
+import { AadhaarService, AadhaarDetails, EncryptedAadhaarData } from './aadhaarService';
 
 export interface Password {
   id: string;
@@ -16,6 +16,8 @@ export interface Password {
 export interface PasswordVault {
   passwords: Password[];
   lastSync: number;
+  aadhaarData?: EncryptedAadhaarData;
+  userEmail?: string;
 }
 
 export class PasswordStorageService {
@@ -69,6 +71,25 @@ export class PasswordStorageService {
       localStorage.setItem(storageKey, encryptedData);
     } catch (error) {
       console.error('Error encrypting vault:', error);
+    }
+  }
+
+  static saveAadhaarToVault(userId: string, aadhaarDetails: AadhaarDetails, userEmail: string, encryptionKey: EncryptionKey): void {
+    const vault = this.getVault(userId, encryptionKey);
+    vault.aadhaarData = AadhaarService.encryptAadhaarDetails(aadhaarDetails);
+    vault.userEmail = userEmail;
+    this.saveVault(userId, vault, encryptionKey);
+  }
+
+  static getAadhaarFromVault(userId: string, encryptionKey: EncryptionKey): AadhaarDetails | null {
+    const vault = this.getVault(userId, encryptionKey);
+    if (!vault.aadhaarData) return null;
+    
+    try {
+      return AadhaarService.decryptAadhaarDetails(vault.aadhaarData);
+    } catch (error) {
+      console.error('Error decrypting Aadhaar data:', error);
+      return null;
     }
   }
 
