@@ -5,7 +5,7 @@ import { Upload, Plus, Key, Shield, AlertCircle } from 'lucide-react';
 import { PasswordStorageService } from '@/lib/passwordStorage';
 import { EncryptionKey } from '@/lib/encryption';
 import AadhaarVerification from './AadhaarVerification';
-import { AadhaarDetails } from '@/lib/aadhaarService';
+import { AadhaarDetails, AadhaarService } from '@/lib/aadhaarService';
 import { useAuth } from './AuthProvider';
 import { useToast } from '@/hooks/use-toast';
 
