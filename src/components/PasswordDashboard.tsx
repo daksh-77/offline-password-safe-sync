@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Download, Key, LogOut, Shield, Eye, EyeOff, Trash2, Edit, Cloud, Settings, Sun, Moon } from 'lucide-react';
+import { Plus, Search, Download, Key, LogOut, Shield, Eye, EyeOff, Trash2, Edit, Cloud, Settings, Sun, Moon, Fingerprint } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from './AuthProvider';
 import { useTheme } from '@/contexts/ThemeContext';
 import { PasswordStorageService, Password } from '@/lib/passwordStorage';
 import { EncryptionKey } from '@/lib/encryption';
 import PasswordForm from './PasswordForm';
+import SecurityDashboard from './SecurityDashboard';
+import BiometricSetup from './BiometricSetup';
+import { BiometricService } from '@/lib/biometricService';
 import { useToast } from '@/hooks/use-toast';
 
 interface PasswordDashboardProps {
@@ -27,10 +30,18 @@ const PasswordDashboard: React.FC<PasswordDashboardProps> = ({
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [editingPassword, setEditingPassword] = useState<Password | null>(null);
   const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState<'passwords' | 'security' | 'settings'>('passwords');
+  const [canUseBiometric, setCanUseBiometric] = useState(false);
 
   useEffect(() => {
     loadPasswords();
+    checkBiometricCapability();
   }, []);
+
+  const checkBiometricCapability = async () => {
+    const capability = await BiometricService.checkBiometricCapability();
+    setCanUseBiometric(capability.isAvailable);
+  };
 
   const loadPasswords = () => {
     if (user) {
@@ -69,6 +80,32 @@ const PasswordDashboard: React.FC<PasswordDashboardProps> = ({
       toast({
         title: "Success",
         description: "Vault exported successfully",
+      });
+    }
+  };
+
+  const handleBiometricLogin = async () => {
+    if (!user) return;
+    
+    try {
+      const success = await BiometricService.authenticateWithBiometric(user.uid);
+      if (success) {
+        toast({
+          title: "Authenticated",
+          description: "Biometric authentication successful",
+        });
+      } else {
+        toast({
+          title: "Authentication Failed",
+          description: "Biometric authentication failed",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Biometric authentication error",
+        variant: "destructive",
       });
     }
   };
@@ -141,6 +178,16 @@ const PasswordDashboard: React.FC<PasswordDashboardProps> = ({
               >
                 {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
               </Button>
+              {canUseBiometric && BiometricService.isBiometricSetup(user?.uid || '') && (
+                <Button
+                  onClick={handleBiometricLogin}
+                  variant="outline"
+                  size="sm"
+                >
+                  <Fingerprint className="w-4 h-4 mr-2" />
+                  Biometric
+                </Button>
+              )}
               {onNavigateToSync && (
                 <Button
                   onClick={onNavigateToSync}
@@ -179,180 +226,249 @@ const PasswordDashboard: React.FC<PasswordDashboardProps> = ({
               </Button>
             </div>
           </div>
+
+          {/* Tab Navigation */}
+          <div className="flex space-x-1 border-b border-border">
+            {[
+              { key: 'passwords', label: 'Passwords', icon: Key },
+              { key: 'security', label: 'Security', icon: Shield },
+              { key: 'settings', label: 'Settings', icon: Settings }
+            ].map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key as any)}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === tab.key
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <tab.icon className="w-4 h-4" />
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Search and Add */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-6">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-            <input
-              type="text"
-              placeholder="Search passwords..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-ring focus:border-ring bg-background text-foreground"
-            />
-          </div>
-          <Button
-            onClick={() => setShowPasswordForm(true)}
-            className="bg-primary hover:bg-primary/90"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Password
-          </Button>
-        </div>
+        {activeTab === 'passwords' && (
+          <>
+            {/* Search and Add */}
+            <div className="flex flex-col sm:flex-row gap-4 mb-6">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                <input
+                  type="text"
+                  placeholder="Search passwords..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-input rounded-lg focus:ring-2 focus:ring-ring focus:border-ring bg-background text-foreground"
+                />
+              </div>
+              <Button
+                onClick={() => setShowPasswordForm(true)}
+                className="bg-primary hover:bg-primary/90"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Password
+              </Button>
+            </div>
 
-        {/* Password Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-card p-6 rounded-lg shadow-sm border border-border">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Passwords</p>
-                <p className="text-2xl font-bold text-foreground">{passwords.length}</p>
+            {/* Password Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div className="bg-card p-6 rounded-lg shadow-sm border border-border">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Total Passwords</p>
+                    <p className="text-2xl font-bold text-foreground">{passwords.length}</p>
+                  </div>
+                  <Key className="w-8 h-8 text-primary" />
+                </div>
               </div>
-              <Key className="w-8 h-8 text-primary" />
-            </div>
-          </div>
-          <div className="bg-card p-6 rounded-lg shadow-sm border border-border">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Categories</p>
-                <p className="text-2xl font-bold text-foreground">
-                  {new Set(passwords.map(p => p.category)).size}
-                </p>
+              <div className="bg-card p-6 rounded-lg shadow-sm border border-border">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Categories</p>
+                    <p className="text-2xl font-bold text-foreground">
+                      {new Set(passwords.map(p => p.category)).size}
+                    </p>
+                  </div>
+                  <Shield className="w-8 h-8 text-green-600" />
+                </div>
               </div>
-              <Shield className="w-8 h-8 text-green-600" />
-            </div>
-          </div>
-          <div className="bg-card p-6 rounded-lg shadow-sm border border-border">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Last Updated</p>
-                <p className="text-2xl font-bold text-foreground">
-                  {passwords.length > 0 ? 'Today' : 'Never'}
-                </p>
+              <div className="bg-card p-6 rounded-lg shadow-sm border border-border">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Last Updated</p>
+                    <p className="text-2xl font-bold text-foreground">
+                      {passwords.length > 0 ? 'Today' : 'Never'}
+                    </p>
+                  </div>
+                  <Download className="w-8 h-8 text-purple-600" />
+                </div>
               </div>
-              <Download className="w-8 h-8 text-purple-600" />
             </div>
-          </div>
-        </div>
 
-        {/* Passwords List */}
-        <div className="bg-card rounded-lg shadow-sm border border-border">
-          <div className="px-6 py-4 border-b border-border">
-            <h2 className="text-lg font-semibold text-foreground">Your Passwords</h2>
-          </div>
-          
-          {filteredPasswords.length === 0 ? (
-            <div className="text-center py-12">
-              <Key className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-foreground mb-2">No passwords found</h3>
-              <p className="text-muted-foreground mb-4">
-                {searchTerm ? 'Try adjusting your search term' : 'Get started by adding your first password'}
-              </p>
-              {!searchTerm && (
-                <Button
-                  onClick={() => setShowPasswordForm(true)}
-                  className="bg-primary hover:bg-primary/90"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Your First Password
-                </Button>
+            {/* Passwords List */}
+            <div className="bg-card rounded-lg shadow-sm border border-border">
+              <div className="px-6 py-4 border-b border-border">
+                <h2 className="text-lg font-semibold text-foreground">Your Passwords</h2>
+              </div>
+              
+              {filteredPasswords.length === 0 ? (
+                <div className="text-center py-12">
+                  <Key className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-foreground mb-2">No passwords found</h3>
+                  <p className="text-muted-foreground mb-4">
+                    {searchTerm ? 'Try adjusting your search term' : 'Get started by adding your first password'}
+                  </p>
+                  {!searchTerm && (
+                    <Button
+                      onClick={() => setShowPasswordForm(true)}
+                      className="bg-primary hover:bg-primary/90"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Your First Password
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {filteredPasswords.map((password) => (
+                    <div key={password.id} className="p-6 hover:bg-accent/50">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-3 mb-2">
+                            <h3 className="text-lg font-medium text-foreground truncate">
+                              {password.name}
+                            </h3>
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                              {password.category}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-sm text-muted-foreground">Username</p>
+                              <p 
+                                className="text-sm font-medium text-foreground cursor-pointer hover:text-primary"
+                                onClick={() => copyToClipboard(password.username, 'Username')}
+                              >
+                                {password.username}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-muted-foreground">Password</p>
+                              <div className="flex items-center gap-2">
+                                <p 
+                                  className="text-sm font-medium text-foreground cursor-pointer hover:text-primary"
+                                  onClick={() => copyToClipboard(password.password, 'Password')}
+                                >
+                                  {visiblePasswords.has(password.id) ? password.password : '••••••••'}
+                                </p>
+                                <button
+                                  onClick={() => togglePasswordVisibility(password.id)}
+                                  className="text-muted-foreground hover:text-foreground"
+                                >
+                                  {visiblePasswords.has(password.id) ? 
+                                    <EyeOff className="w-4 h-4" /> : 
+                                    <Eye className="w-4 h-4" />
+                                  }
+                                </button>
+                              </div>
+                            </div>
+                            {password.url && (
+                              <div>
+                                <p className="text-sm text-muted-foreground">Website</p>
+                                <a 
+                                  href={password.url} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="text-sm font-medium text-primary hover:text-primary/80"
+                                >
+                                  {password.url}
+                                </a>
+                              </div>
+                            )}
+                            {password.notes && (
+                              <div>
+                                <p className="text-sm text-muted-foreground">Notes</p>
+                                <p className="text-sm text-foreground">{password.notes}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 ml-4">
+                          <Button
+                            onClick={() => {
+                              setEditingPassword(password);
+                              setShowPasswordForm(true);
+                            }}
+                            variant="outline"
+                            size="sm"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            onClick={() => handleDeletePassword(password.id)}
+                            variant="outline"
+                            size="sm"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {filteredPasswords.map((password) => (
-                <div key={password.id} className="p-6 hover:bg-accent/50">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-lg font-medium text-foreground truncate">
-                          {password.name}
-                        </h3>
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                          {password.category}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-sm text-muted-foreground">Username</p>
-                          <p 
-                            className="text-sm font-medium text-foreground cursor-pointer hover:text-primary"
-                            onClick={() => copyToClipboard(password.username, 'Username')}
-                          >
-                            {password.username}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">Password</p>
-                          <div className="flex items-center gap-2">
-                            <p 
-                              className="text-sm font-medium text-foreground cursor-pointer hover:text-primary"
-                              onClick={() => copyToClipboard(password.password, 'Password')}
-                            >
-                              {visiblePasswords.has(password.id) ? password.password : '••••••••'}
-                            </p>
-                            <button
-                              onClick={() => togglePasswordVisibility(password.id)}
-                              className="text-muted-foreground hover:text-foreground"
-                            >
-                              {visiblePasswords.has(password.id) ? 
-                                <EyeOff className="w-4 h-4" /> : 
-                                <Eye className="w-4 h-4" />
-                              }
-                            </button>
-                          </div>
-                        </div>
-                        {password.url && (
-                          <div>
-                            <p className="text-sm text-muted-foreground">Website</p>
-                            <a 
-                              href={password.url} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="text-sm font-medium text-primary hover:text-primary/80"
-                            >
-                              {password.url}
-                            </a>
-                          </div>
-                        )}
-                        {password.notes && (
-                          <div>
-                            <p className="text-sm text-muted-foreground">Notes</p>
-                            <p className="text-sm text-foreground">{password.notes}</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 ml-4">
-                      <Button
-                        onClick={() => {
-                          setEditingPassword(password);
-                          setShowPasswordForm(true);
-                        }}
-                        variant="outline"
-                        size="sm"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        onClick={() => handleDeletePassword(password.id)}
-                        variant="outline"
-                        size="sm"
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
+          </>
+        )}
+
+        {activeTab === 'security' && (
+          <SecurityDashboard 
+            passwords={passwords}
+            onPasswordSelect={(passwordId) => {
+              const password = passwords.find(p => p.id === passwordId);
+              if (password) {
+                setEditingPassword(password);
+                setShowPasswordForm(true);
+              }
+            }}
+          />
+        )}
+
+        {activeTab === 'settings' && (
+          <div className="space-y-6">
+            {user && (
+              <BiometricSetup 
+                userId={user.uid}
+                onSetupComplete={() => {
+                  toast({
+                    title: "Biometric Setup Complete",
+                    description: "You can now use biometric authentication",
+                  });
+                }}
+              />
+            )}
+            
+            <div className="bg-card p-6 rounded-lg border border-border">
+              <h3 className="text-lg font-medium text-foreground mb-4">Theme Settings</h3>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-foreground">Dark Mode</p>
+                  <p className="text-sm text-muted-foreground">Toggle between light and dark themes</p>
                 </div>
-              ))}
+                <Button onClick={toggleTheme} variant="outline">
+                  {theme === 'light' ? <Moon className="w-4 h-4 mr-2" /> : <Sun className="w-4 h-4 mr-2" />}
+                  {theme === 'light' ? 'Dark' : 'Light'} Mode
+                </Button>
+              </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

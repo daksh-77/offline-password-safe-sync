@@ -1,9 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Eye, EyeOff, RefreshCw, Copy } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, RefreshCw, Copy, Shield, AlertTriangle } from 'lucide-react';
 import { Password } from '@/lib/passwordStorage';
 import { PasswordStorageService } from '@/lib/passwordStorage';
+import { PasswordAnalyzer } from '@/lib/passwordAnalyzer';
+import { BreachMonitor } from '@/lib/breachMonitor';
 import { useToast } from '@/hooks/use-toast';
 
 interface PasswordFormProps {
@@ -23,7 +25,9 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSave, onCancel 
     category: 'Personal'
   });
   const [showPassword, setShowPassword] = useState(false);
-  const [passwordStrength, setPasswordStrength] = useState(0);
+  const [passwordAnalysis, setPasswordAnalysis] = useState<any>(null);
+  const [isCheckingBreach, setIsCheckingBreach] = useState(false);
+  const [breachStatus, setBreachStatus] = useState<'safe' | 'warning' | 'danger'>('safe');
 
   useEffect(() => {
     if (password) {
@@ -39,18 +43,34 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSave, onCancel 
   }, [password]);
 
   useEffect(() => {
-    calculatePasswordStrength(formData.password);
+    if (formData.password) {
+      analyzePassword(formData.password);
+      checkPasswordBreach(formData.password);
+    }
   }, [formData.password]);
 
-  const calculatePasswordStrength = (password: string) => {
-    let strength = 0;
-    if (password.length >= 8) strength += 25;
-    if (password.length >= 12) strength += 25;
-    if (/[A-Z]/.test(password)) strength += 15;
-    if (/[a-z]/.test(password)) strength += 15;
-    if (/[0-9]/.test(password)) strength += 10;
-    if (/[^A-Za-z0-9]/.test(password)) strength += 10;
-    setPasswordStrength(Math.min(strength, 100));
+  const analyzePassword = (password: string) => {
+    const analysis = PasswordAnalyzer.analyzePassword(password);
+    setPasswordAnalysis(analysis);
+  };
+
+  const checkPasswordBreach = async (password: string) => {
+    if (password.length < 4) return;
+    
+    setIsCheckingBreach(true);
+    try {
+      const result = await BreachMonitor.checkPasswordBreach(password);
+      if (result.isBreached) {
+        setBreachStatus('danger');
+      } else {
+        const safety = BreachMonitor.getPasswordSafety(password);
+        setBreachStatus(safety);
+      }
+    } catch (error) {
+      console.error('Breach check failed:', error);
+    } finally {
+      setIsCheckingBreach(false);
+    }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -111,17 +131,27 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSave, onCancel 
   };
 
   const getStrengthColor = () => {
-    if (passwordStrength < 30) return 'bg-red-500';
-    if (passwordStrength < 60) return 'bg-yellow-500';
-    if (passwordStrength < 80) return 'bg-blue-500';
+    if (!passwordAnalysis) return 'bg-gray-300';
+    if (passwordAnalysis.score < 30) return 'bg-red-500';
+    if (passwordAnalysis.score < 60) return 'bg-yellow-500';
+    if (passwordAnalysis.score < 80) return 'bg-blue-500';
     return 'bg-green-500';
   };
 
-  const getStrengthText = () => {
-    if (passwordStrength < 30) return 'Weak';
-    if (passwordStrength < 60) return 'Fair';
-    if (passwordStrength < 80) return 'Good';
-    return 'Strong';
+  const getBreachStatusColor = () => {
+    switch (breachStatus) {
+      case 'safe': return 'text-green-600 bg-green-50 border-green-200';
+      case 'warning': return 'text-amber-600 bg-amber-50 border-amber-200';
+      case 'danger': return 'text-red-600 bg-red-50 border-red-200';
+    }
+  };
+
+  const getBreachStatusIcon = () => {
+    switch (breachStatus) {
+      case 'safe': return <Shield className="w-4 h-4" />;
+      case 'warning': return <AlertTriangle className="w-4 h-4" />;
+      case 'danger': return <AlertTriangle className="w-4 h-4" />;
+    }
   };
 
   return (
@@ -233,24 +263,63 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSave, onCancel 
                 </div>
               </div>
               
-              {formData.password && (
-                <div className="mt-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Password strength:</span>
-                    <span className={`font-medium ${
-                      passwordStrength < 30 ? 'text-red-600' :
-                      passwordStrength < 60 ? 'text-yellow-600' :
-                      passwordStrength < 80 ? 'text-blue-600' : 'text-green-600'
-                    }`}>
-                      {getStrengthText()}
+              {/* Password Analysis */}
+              {formData.password && passwordAnalysis && (
+                <div className="mt-3 space-y-3">
+                  {/* Strength Meter */}
+                  <div>
+                    <div className="flex items-center justify-between text-sm mb-1">
+                      <span className="text-gray-600">Password strength:</span>
+                      <span className={`font-medium ${
+                        passwordAnalysis.score < 30 ? 'text-red-600' :
+                        passwordAnalysis.score < 60 ? 'text-yellow-600' :
+                        passwordAnalysis.score < 80 ? 'text-blue-600' : 'text-green-600'
+                      }`}>
+                        {passwordAnalysis.level} ({passwordAnalysis.score}/100)
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className={`h-2 rounded-full transition-all ${getStrengthColor()}`}
+                        style={{ width: `${passwordAnalysis.score}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Crack Time */}
+                  <div className="text-sm text-gray-600">
+                    <strong>Estimated crack time:</strong> {passwordAnalysis.estimatedCrackTime}
+                  </div>
+
+                  {/* Breach Status */}
+                  <div className={`p-3 rounded-lg border flex items-center gap-2 text-sm ${getBreachStatusColor()}`}>
+                    {isCheckingBreach ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
+                    ) : (
+                      getBreachStatusIcon()
+                    )}
+                    <span>
+                      {isCheckingBreach ? 'Checking for breaches...' :
+                       breachStatus === 'danger' ? 'Password found in data breaches!' :
+                       breachStatus === 'warning' ? 'Password may be vulnerable' :
+                       'No known breaches detected'}
                     </span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-                    <div 
-                      className={`h-2 rounded-full transition-all ${getStrengthColor()}`}
-                      style={{ width: `${passwordStrength}%` }}
-                    />
-                  </div>
+
+                  {/* Feedback */}
+                  {passwordAnalysis.feedback.length > 0 && (
+                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                      <h4 className="text-sm font-medium text-blue-800 mb-2">Suggestions:</h4>
+                      <ul className="text-sm text-blue-700 space-y-1">
+                        {passwordAnalysis.feedback.map((feedback: string, index: number) => (
+                          <li key={index} className="flex items-start gap-1">
+                            <span className="w-1 h-1 bg-blue-500 rounded-full mt-2"></span>
+                            {feedback}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
 

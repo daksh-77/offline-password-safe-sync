@@ -1,8 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Upload, Shield, CheckCircle, AlertCircle } from 'lucide-react';
+import { Upload, FileText, AlertCircle, CheckCircle, ArrowLeft } from 'lucide-react';
 import { AadhaarService, AadhaarDetails } from '@/lib/aadhaarService';
+import { useToast } from '@/hooks/use-toast';
 
 interface AadhaarVerificationProps {
   onVerificationComplete: (details: AadhaarDetails) => void;
@@ -15,124 +16,195 @@ const AadhaarVerification: React.FC<AadhaarVerificationProps> = ({
   onVerificationComplete,
   onCancel,
   title = "Aadhaar Verification",
-  description = "Upload your Aadhaar PDF for secure verification"
+  description = "Upload your Aadhaar PDF for verification"
 }) => {
-  const [isUploading, setIsUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [verificationStep, setVerificationStep] = useState<'upload' | 'processing' | 'success'>('upload');
   const [extractedDetails, setExtractedDetails] = useState<AadhaarDetails | null>(null);
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     if (file.type !== 'application/pdf') {
-      setError('Please upload a valid PDF file');
+      toast({
+        title: "Invalid File",
+        description: "Please upload a PDF file",
+        variant: "destructive",
+      });
       return;
     }
 
-    setIsUploading(true);
-    setError(null);
+    if (file.size > 10 * 1024 * 1024) { // 10MB limit
+      toast({
+        title: "File Too Large",
+        description: "Please upload a file smaller than 10MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    await processAadhaarPDF(file);
+  };
+
+  const processAadhaarPDF = async (file: File) => {
+    setIsProcessing(true);
+    setVerificationStep('processing');
 
     try {
+      console.log('Starting Aadhaar PDF processing...');
       const details = await AadhaarService.extractAadhaarFromPDF(file);
+      
+      console.log('Aadhaar details extracted:', { 
+        name: details.name, 
+        aadhaarNumber: details.aadhaarNumber.slice(-4) // Log only last 4 digits for security
+      });
+
       setExtractedDetails(details);
-    } catch (error: any) {
-      setError(error.message || 'Failed to process Aadhaar PDF');
+      setVerificationStep('success');
+      
+      toast({
+        title: "Verification Successful",
+        description: "Aadhaar details extracted successfully",
+      });
+    } catch (error) {
+      console.error('Aadhaar verification failed:', error);
+      setVerificationStep('upload');
+      toast({
+        title: "Verification Failed",
+        description: error instanceof Error ? error.message : "Failed to verify Aadhaar PDF",
+        variant: "destructive",
+      });
     } finally {
-      setIsUploading(false);
+      setIsProcessing(false);
     }
   };
 
-  const handleConfirmVerification = () => {
+  const handleConfirmDetails = () => {
     if (extractedDetails) {
       onVerificationComplete(extractedDetails);
     }
   };
 
+  const triggerFileInput = () => {
+    fileInputRef.current?.click();
+  };
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-card rounded-xl shadow-lg p-8">
+      <div className="max-w-md w-full bg-card rounded-lg shadow-lg p-6 border border-border">
+        {onCancel && (
+          <Button
+            onClick={onCancel}
+            variant="outline"
+            size="sm"
+            className="mb-4"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back
+          </Button>
+        )}
+
         <div className="text-center mb-6">
           <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center mx-auto mb-4">
-            <Shield className="w-8 h-8 text-primary-foreground" />
+            <FileText className="w-8 h-8 text-primary-foreground" />
           </div>
           <h1 className="text-2xl font-bold text-foreground mb-2">{title}</h1>
           <p className="text-muted-foreground">{description}</p>
         </div>
 
-        {error && (
-          <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 text-destructive mt-0.5" />
-            <p className="text-sm text-destructive">{error}</p>
+        {verificationStep === 'upload' && (
+          <div className="space-y-4">
+            <Button
+              disabled={isProcessing}
+              onClick={triggerFileInput}
+              className="w-full bg-primary hover:bg-primary/90"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Upload Aadhaar PDF
+            </Button>
+            
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/pdf"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+
+            <div className="text-xs text-muted-foreground bg-muted p-3 rounded-lg">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5" />
+                <div>
+                  <p className="font-medium mb-1">Security Notice:</p>
+                  <ul className="space-y-1">
+                    <li>• Upload only official Aadhaar PDF from UIDAI</li>
+                    <li>• File is processed locally on your device</li>
+                    <li>• No data is sent to external servers</li>
+                    <li>• Maximum file size: 10MB</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
-        {!extractedDetails ? (
+        {verificationStep === 'processing' && (
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <h3 className="text-lg font-medium text-foreground mb-2">Processing Aadhaar PDF</h3>
+            <p className="text-muted-foreground">Verifying document integrity and extracting details...</p>
+          </div>
+        )}
+
+        {verificationStep === 'success' && extractedDetails && (
           <div className="space-y-4">
-            <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
-              <Upload className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-sm text-muted-foreground mb-4">
-                Upload your Aadhaar PDF file for verification
-              </p>
-              <input
-                type="file"
-                accept=".pdf"
-                onChange={handleFileUpload}
-                className="hidden"
-                id="aadhaar-upload"
-                disabled={isUploading}
-              />
-              <label htmlFor="aadhaar-upload">
-                <Button
-                  as="span"
-                  disabled={isUploading}
-                  className="cursor-pointer"
-                >
-                  {isUploading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="w-4 h-4 mr-2" />
-                      Choose PDF File
-                    </>
-                  )}
-                </Button>
-              </label>
+            <div className="text-center">
+              <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-foreground mb-2">Verification Successful</h3>
             </div>
 
-            <div className="text-xs text-muted-foreground space-y-1">
-              <p>• Only valid Aadhaar PDF files are accepted</p>
-              <p>• Your data is processed locally and securely</p>
-              <p>• No data is sent to external servers</p>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="p-4 bg-accent rounded-lg">
-              <div className="flex items-center gap-2 mb-3">
-                <CheckCircle className="w-5 h-5 text-green-600" />
-                <h3 className="font-medium">Verification Successful</h3>
+            <div className="bg-muted p-4 rounded-lg space-y-3">
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Name</label>
+                <p className="text-foreground">{extractedDetails.name}</p>
               </div>
-              <div className="space-y-2 text-sm">
-                <p><strong>Name:</strong> {extractedDetails.name}</p>
-                <p><strong>Aadhaar Number:</strong> {extractedDetails.aadhaarNumber.replace(/(\d{4})(\d{4})(\d{4})/, '$1 $2 $3')}</p>
-                {extractedDetails.dob && <p><strong>DOB:</strong> {extractedDetails.dob}</p>}
-                {extractedDetails.gender && <p><strong>Gender:</strong> {extractedDetails.gender}</p>}
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Aadhaar Number</label>
+                <p className="text-foreground font-mono">
+                  XXXX XXXX {extractedDetails.aadhaarNumber.slice(-4)}
+                </p>
               </div>
+              {extractedDetails.dob && (
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Date of Birth</label>
+                  <p className="text-foreground">{extractedDetails.dob}</p>
+                </div>
+              )}
+              {extractedDetails.gender && (
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Gender</label>
+                  <p className="text-foreground">{extractedDetails.gender}</p>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3">
-              <Button onClick={handleConfirmVerification} className="flex-1">
+              <Button
+                onClick={() => setVerificationStep('upload')}
+                variant="outline"
+                className="flex-1"
+              >
+                Upload Different PDF
+              </Button>
+              <Button
+                onClick={handleConfirmDetails}
+                className="flex-1 bg-primary hover:bg-primary/90"
+              >
                 Confirm & Continue
               </Button>
-              {onCancel && (
-                <Button variant="outline" onClick={onCancel}>
-                  Cancel
-                </Button>
-              )}
             </div>
           </div>
         )}
