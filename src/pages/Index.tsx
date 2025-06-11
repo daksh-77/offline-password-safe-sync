@@ -43,21 +43,25 @@ const AppContent = () => {
     setAppState('aadhaar-setup');
   };
 
-  const handleAadhaarSetup = (aadhaarDetails: AadhaarDetails) => {
+  const handleAadhaarSetup = async (aadhaarDetails: AadhaarDetails) => {
     if (!user) return;
 
-    // Generate new encryption key
-    const newKey = EncryptionService.generateKey();
-    setEncryptionKey(newKey);
-    
-    // Save Aadhaar data to vault
-    PasswordStorageService.saveAadhaarToVault(user.uid, aadhaarDetails, user.email || '', newKey);
-    
-    // Save encryption key
-    localStorage.setItem(`encryption_key_${user.uid}`, JSON.stringify(newKey));
-    
-    setShowKeyDownload(true);
-    setAppState('dashboard');
+    try {
+      // Generate new encryption key
+      const newKey = EncryptionService.generateKey();
+      setEncryptionKey(newKey);
+      
+      // Save Aadhaar data to vault (now async)
+      await PasswordStorageService.saveAadhaarToVault(user.uid, aadhaarDetails, user.email || '', newKey);
+      
+      // Save encryption key
+      localStorage.setItem(`encryption_key_${user.uid}`, JSON.stringify(newKey));
+      
+      setShowKeyDownload(true);
+      setAppState('dashboard');
+    } catch (error) {
+      console.error('Error setting up Aadhaar:', error);
+    }
   };
 
   const handleVaultLoaded = (key: EncryptionKey) => {

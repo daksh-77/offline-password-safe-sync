@@ -1,3 +1,4 @@
+
 import { EncryptionService, EncryptionKey } from './encryption';
 import { AadhaarService, AadhaarDetails, EncryptedAadhaarData } from './aadhaarService';
 
@@ -74,19 +75,19 @@ export class PasswordStorageService {
     }
   }
 
-  static saveAadhaarToVault(userId: string, aadhaarDetails: AadhaarDetails, userEmail: string, encryptionKey: EncryptionKey): void {
+  static async saveAadhaarToVault(userId: string, aadhaarDetails: AadhaarDetails, userEmail: string, encryptionKey: EncryptionKey): Promise<void> {
     const vault = this.getVault(userId, encryptionKey);
-    vault.aadhaarData = AadhaarService.encryptAadhaarDetails(aadhaarDetails);
+    vault.aadhaarData = await AadhaarService.encryptAadhaarDetails(aadhaarDetails);
     vault.userEmail = userEmail;
     this.saveVault(userId, vault, encryptionKey);
   }
 
-  static getAadhaarFromVault(userId: string, encryptionKey: EncryptionKey): AadhaarDetails | null {
+  static async getAadhaarFromVault(userId: string, encryptionKey: EncryptionKey): Promise<AadhaarDetails | null> {
     const vault = this.getVault(userId, encryptionKey);
     if (!vault.aadhaarData) return null;
     
     try {
-      return AadhaarService.decryptAadhaarDetails(vault.aadhaarData);
+      return await AadhaarService.decryptAadhaarDetails(vault.aadhaarData);
     } catch (error) {
       console.error('Error decrypting Aadhaar data:', error);
       return null;

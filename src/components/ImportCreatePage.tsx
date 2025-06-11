@@ -107,16 +107,26 @@ const ImportCreatePage: React.FC<ImportCreatePageProps> = ({
         return;
       }
 
-      // For recovery, we would need to implement email sending
-      // Since this is offline-first, we'll show a message
-      toast({
-        title: "Recovery Request",
-        description: "Aadhaar verified! In a real implementation, the decryption key would be sent to your email.",
-      });
+      // Decrypt stored Aadhaar data and verify
+      try {
+        const storedAadhaar = await AadhaarService.decryptAadhaarDetails(vault.aadhaarData);
+        const isMatch = AadhaarService.verifyAadhaarMatch(aadhaarDetails, storedAadhaar);
+        
+        if (isMatch) {
+          toast({
+            title: "Identity Verified",
+            description: "Aadhaar verification successful! In a real implementation, the decryption key would be sent to your email.",
+          });
+        } else {
+          setError('Aadhaar details do not match the stored information');
+        }
+      } catch (decryptError) {
+        setError('Failed to verify Aadhaar details');
+      }
       
       setShowAadhaarVerification(false);
     } catch (error) {
-      setError('Failed to verify Aadhaar details');
+      setError('Failed to process Aadhaar verification');
       setShowAadhaarVerification(false);
     }
   };
