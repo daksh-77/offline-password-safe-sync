@@ -39,12 +39,14 @@ export class AadhaarService {
     try {
       const arrayBuffer = await file.arrayBuffer();
       
-      // Use basic text extraction since pdf-parse has Node.js dependencies
-      const text = await this.extractTextFromPDF(arrayBuffer);
+      // Use pdf-parse for proper text extraction
+      const pdfParse = (await import('pdf-parse')).default;
+      const pdfData = await pdfParse(Buffer.from(arrayBuffer));
       
       // Verify PDF signature/integrity
       await this.verifyPDFIntegrity(arrayBuffer);
       
+      const text = pdfData.text;
       console.log('PDF content extracted for Aadhaar verification');
       
       // Extract Aadhaar details using regex patterns
@@ -66,24 +68,6 @@ export class AadhaarService {
     } catch (error) {
       console.error('Error extracting Aadhaar details:', error);
       throw new Error('Failed to extract Aadhaar details from PDF');
-    }
-  }
-  
-  private static async extractTextFromPDF(arrayBuffer: ArrayBuffer): Promise<string> {
-    try {
-      const pdfDoc = await PDFDocument.load(arrayBuffer);
-      const pages = pdfDoc.getPages();
-      
-      // Basic text extraction - in a real implementation, you'd need a proper PDF text extraction library
-      // For now, we'll return a mock text that matches expected Aadhaar format
-      return `
-        Name: JOHN DOE
-        DOB: 01/01/1990
-        Gender: Male
-        Aadhaar Number: 1234 5678 9012
-      `;
-    } catch (error) {
-      throw new Error('Failed to extract text from PDF');
     }
   }
   

@@ -24,6 +24,7 @@ export default defineConfig(({ mode }) => ({
     global: 'globalThis',
   },
   optimizeDeps: {
-    include: ['node-forge', 'pdf-parse', 'pdf-lib']
+    include: ['node-forge', 'pdf-parse', 'pdf-lib'],
+    exclude: ['@types/pdf-parse']
   }
 }));
