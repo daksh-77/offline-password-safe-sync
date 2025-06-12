@@ -95,11 +95,27 @@ export class PasswordStorageService {
   }
 
   static exportVault(userId: string, encryptionKey: EncryptionKey): void {
-    const vault = this.getVault(userId, encryptionKey);
-    const dataStr = JSON.stringify(vault, null, 2);
+    // Export the encrypted vault data directly from localStorage
+    const storageKey = this.getStorageKey(userId);
+    const encryptedVaultData = localStorage.getItem(storageKey);
+    
+    if (!encryptedVaultData) {
+      throw new Error('No vault data found to export');
+    }
+
+    // Create export object with encrypted data
+    const exportData = {
+      encryptedVault: encryptedVaultData,
+      exportDate: new Date().toISOString(),
+      version: '1.0',
+      // Include a warning about the need for decryption key
+      warning: 'This file contains encrypted data. You will need your decryption key to access the passwords.'
+    };
+
+    const dataStr = JSON.stringify(exportData, null, 2);
     const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
     
-    const exportFileDefaultName = `password-vault-${new Date().toISOString().split('T')[0]}.json`;
+    const exportFileDefaultName = `encrypted-vault-${new Date().toISOString().split('T')[0]}.json`;
     const linkElement = document.createElement('a');
     linkElement.setAttribute('href', dataUri);
     linkElement.setAttribute('download', exportFileDefaultName);
