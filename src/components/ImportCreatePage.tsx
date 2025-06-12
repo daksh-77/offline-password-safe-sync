@@ -6,7 +6,7 @@ import { AadhaarDetails } from '@/lib/aadhaarService';
 import { WelcomeHeader } from './WelcomeHeader';
 import { ErrorDisplay } from './ErrorDisplay';
 import { ActionButtons } from './ActionButtons';
-import { ImportVaultFlow } from './ImportVaultFlow';
+import { useImportVaultFlow } from '@/hooks/useImportVaultFlow';
 
 interface ImportCreatePageProps {
   onVaultLoaded: (encryptionKey: EncryptionKey) => void;
@@ -22,7 +22,7 @@ const ImportCreatePage: React.FC<ImportCreatePageProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [vaultFile, setVaultFile] = useState<File | null>(null);
 
-  const importFlow = ImportVaultFlow({
+  const importFlow = useImportVaultFlow({
     onVaultLoaded,
     onError: setError,
     onVaultFileSelected: setVaultFile,

@@ -1,24 +1,23 @@
 
-import React from 'react';
 import { PasswordStorageService } from '@/lib/passwordStorage';
 import { EncryptionKey } from '@/lib/encryption';
 import { AadhaarService, AadhaarDetails } from '@/lib/aadhaarService';
-import { useAuth } from './AuthProvider';
+import { useAuth } from '@/components/AuthProvider';
 import { useToast } from '@/hooks/use-toast';
 
-interface ImportVaultFlowProps {
+interface UseImportVaultFlowProps {
   onVaultLoaded: (encryptionKey: EncryptionKey) => void;
   onError: (error: string) => void;
   onVaultFileSelected: (file: File) => void;
   setIsImporting: (loading: boolean) => void;
 }
 
-export const ImportVaultFlow: React.FC<ImportVaultFlowProps> = ({
+export const useImportVaultFlow = ({
   onVaultLoaded,
   onError,
   onVaultFileSelected,
   setIsImporting
-}) => {
+}: UseImportVaultFlowProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
 
