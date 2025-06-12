@@ -1,4 +1,9 @@
+
 import { PDFDocument } from 'pdf-lib';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Set up PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 // Use dynamic import for node-forge to avoid build issues
 let forge: any;
@@ -41,17 +46,16 @@ export class AadhaarService {
       // Verify PDF integrity first
       await this.verifyPDFIntegrity(arrayBuffer);
       
-      // For production, you would integrate with a proper PDF text extraction service
-      // such as PDF.js worker, Tesseract.js for OCR, or a server-side service
+      // Extract text from PDF using PDF.js
       const text = await this.extractTextFromPDF(arrayBuffer);
       
       console.log('PDF content extracted for Aadhaar verification');
       
       // Extract Aadhaar details using improved regex patterns
       const aadhaarMatch = text.match(/(\d{4}\s*\d{4}\s*\d{4})/);
-      const nameMatch = text.match(/Name[:\s]*([A-Z\s]+)/i);
-      const dobMatch = text.match(/DOB[:\s]*(\d{2}\/\d{2}\/\d{4})|(\d{2}-\d{2}-\d{4})/i);
-      const genderMatch = text.match(/Gender[:\s]*(Male|Female|Others)/i);
+      const nameMatch = text.match(/Name[:\s]*([A-Z\s]+)/i) || text.match(/नाम[:\s]*([A-Z\s]+)/i);
+      const dobMatch = text.match(/DOB[:\s]*(\d{2}\/\d{2}\/\d{4})|(\d{2}-\d{2}-\d{4})/i) || text.match(/जन्म[:\s]*(\d{2}\/\d{2}\/\d{4})|(\d{2}-\d{2}-\d{4})/i);
+      const genderMatch = text.match(/Gender[:\s]*(Male|Female|Others)/i) || text.match(/लिंग[:\s]*(पुरुष|महिला|अन्य)/i);
       
       if (!aadhaarMatch || !nameMatch) {
         throw new Error('Invalid Aadhaar PDF: Required details not found. Please ensure the PDF contains clear Aadhaar information.');
@@ -71,26 +75,23 @@ export class AadhaarService {
   
   private static async extractTextFromPDF(arrayBuffer: ArrayBuffer): Promise<string> {
     try {
-      // Load PDF with pdf-lib for basic text extraction
-      const pdfDoc = await PDFDocument.load(arrayBuffer);
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let fullText = '';
       
-      // In production, implement one of these approaches:
-      // 1. Use PDF.js worker for client-side text extraction
-      // 2. Use Tesseract.js for OCR if the PDF is image-based
-      // 3. Send to a server-side service for processing
-      // 4. Use a service like AWS Textract or Google Cloud Document AI
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items
+          .map((item: any) => item.str)
+          .join(' ');
+        fullText += pageText + ' ';
+      }
       
-      // For now, we'll check if the PDF has text content and simulate extraction
-      const pageCount = pdfDoc.getPageCount();
-      console.log(`Processing ${pageCount} pages`);
-      
-      // This is a placeholder - in production, replace with actual text extraction
-      // You could prompt user to manually enter details if automatic extraction fails
-      throw new Error('Automatic PDF text extraction not implemented. Please manually enter your Aadhaar details.');
-      
+      console.log('Extracted text from PDF:', fullText.substring(0, 200) + '...');
+      return fullText;
     } catch (error) {
       console.error('PDF text extraction error:', error);
-      throw error;
+      throw new Error('Failed to extract text from PDF. The file may be corrupted or password-protected.');
     }
   }
   

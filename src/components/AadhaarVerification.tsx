@@ -1,9 +1,10 @@
 
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Upload, FileText, AlertCircle, CheckCircle, ArrowLeft } from 'lucide-react';
+import { Upload, FileText, AlertCircle, CheckCircle, ArrowLeft, Edit } from 'lucide-react';
 import { AadhaarService, AadhaarDetails } from '@/lib/aadhaarService';
 import { useToast } from '@/hooks/use-toast';
+import ManualAadhaarEntry from './ManualAadhaarEntry';
 
 interface AadhaarVerificationProps {
   onVerificationComplete: (details: AadhaarDetails) => void;
@@ -21,7 +22,7 @@ const AadhaarVerification: React.FC<AadhaarVerificationProps> = ({
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [verificationStep, setVerificationStep] = useState<'upload' | 'processing' | 'success'>('upload');
+  const [verificationStep, setVerificationStep] = useState<'upload' | 'processing' | 'success' | 'manual'>('upload');
   const [extractedDetails, setExtractedDetails] = useState<AadhaarDetails | null>(null);
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -73,8 +74,8 @@ const AadhaarVerification: React.FC<AadhaarVerificationProps> = ({
       console.error('Aadhaar verification failed:', error);
       setVerificationStep('upload');
       toast({
-        title: "Verification Failed",
-        description: error instanceof Error ? error.message : "Failed to verify Aadhaar PDF",
+        title: "PDF Processing Failed",
+        description: "Could not extract details from PDF. You can enter them manually instead.",
         variant: "destructive",
       });
     } finally {
@@ -88,9 +89,29 @@ const AadhaarVerification: React.FC<AadhaarVerificationProps> = ({
     }
   };
 
+  const handleManualEntry = (details: AadhaarDetails) => {
+    setExtractedDetails(details);
+    setVerificationStep('success');
+    toast({
+      title: "Details Entered",
+      description: "Aadhaar details entered successfully",
+    });
+  };
+
   const triggerFileInput = () => {
     fileInputRef.current?.click();
   };
+
+  if (verificationStep === 'manual') {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <ManualAadhaarEntry
+          onSubmit={handleManualEntry}
+          onCancel={() => setVerificationStep('upload')}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -124,6 +145,24 @@ const AadhaarVerification: React.FC<AadhaarVerificationProps> = ({
             >
               <Upload className="w-4 h-4 mr-2" />
               Upload Aadhaar PDF
+            </Button>
+            
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">Or</span>
+              </div>
+            </div>
+
+            <Button
+              onClick={() => setVerificationStep('manual')}
+              variant="outline"
+              className="w-full"
+            >
+              <Edit className="w-4 h-4 mr-2" />
+              Enter Details Manually
             </Button>
             
             <input
