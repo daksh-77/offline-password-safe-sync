@@ -1,4 +1,3 @@
-
 import { auth } from './firebase';
 
 export interface DriveFile {
@@ -15,10 +14,19 @@ export class DriveService {
       const user = auth.currentUser;
       if (!user) throw new Error('User not authenticated');
       
-      const accessToken = await user.getIdToken();
+      // Get a fresh access token
+      const accessToken = await user.getIdToken(true);
+      
+      console.log('Uploading vault to Drive...');
       
       // Create folder if it doesn't exist
       const folderId = await this.ensureBackupFolder(accessToken);
+      
+      // Check if file already exists and delete it
+      const existingFileId = await this.findFile(accessToken, fileName);
+      if (existingFileId) {
+        await this.deleteFile(accessToken, existingFileId);
+      }
       
       // Upload file
       const metadata = {
@@ -39,7 +47,9 @@ export class DriveService {
       });
       
       if (!response.ok) {
-        throw new Error('Failed to upload to Drive');
+        const errorText = await response.text();
+        console.error('Drive upload error:', response.status, errorText);
+        throw new Error(`Failed to upload to Drive: ${response.status} ${response.statusText}`);
       }
       
       console.log('Vault uploaded to Google Drive successfully');
@@ -54,7 +64,7 @@ export class DriveService {
       const user = auth.currentUser;
       if (!user) throw new Error('User not authenticated');
       
-      const accessToken = await user.getIdToken();
+      const accessToken = await user.getIdToken(true);
       
       // Find the file
       const fileId = await this.findFile(accessToken, fileName);
@@ -68,7 +78,7 @@ export class DriveService {
       });
       
       if (!response.ok) {
-        throw new Error('Failed to download from Drive');
+        throw new Error(`Failed to download from Drive: ${response.status} ${response.statusText}`);
       }
       
       return await response.text();
@@ -145,5 +155,18 @@ export class DriveService {
     
     const data = await response.json();
     return data.files && data.files.length > 0 ? data.files[0] : null;
+  }
+  
+  private static async deleteFile(accessToken: string, fileId: string): Promise<void> {
+    const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    });
+    
+    if (!response.ok && response.status !== 404) {
+      throw new Error('Failed to delete existing file');
+    }
   }
 }

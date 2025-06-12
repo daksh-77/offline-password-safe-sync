@@ -1,4 +1,3 @@
-
 import { PDFDocument } from 'pdf-lib';
 import * as pdfjsLib from 'pdfjs-dist';
 
@@ -75,23 +74,43 @@ export class AadhaarService {
   
   private static async extractTextFromPDF(arrayBuffer: ArrayBuffer): Promise<string> {
     try {
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      console.log('Starting PDF text extraction...');
+      const pdf = await pdfjsLib.getDocument({ 
+        data: arrayBuffer,
+        verbosity: 0 // Reduce console noise
+      }).promise;
+      
+      console.log(`PDF loaded with ${pdf.numPages} pages`);
       let fullText = '';
       
       for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
-        const pageText = textContent.items
-          .map((item: any) => item.str)
-          .join(' ');
-        fullText += pageText + ' ';
+        try {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items
+            .map((item: any) => {
+              // Handle both text items and marked content
+              if (typeof item === 'string') return item;
+              return item.str || '';
+            })
+            .join(' ');
+          fullText += pageText + ' ';
+          console.log(`Extracted text from page ${i}:`, pageText.substring(0, 100) + '...');
+        } catch (pageError) {
+          console.error(`Error extracting text from page ${i}:`, pageError);
+          // Continue with other pages
+        }
       }
       
-      console.log('Extracted text from PDF:', fullText.substring(0, 200) + '...');
+      if (!fullText.trim()) {
+        throw new Error('No text content found in PDF');
+      }
+      
+      console.log('Full extracted text preview:', fullText.substring(0, 200) + '...');
       return fullText;
     } catch (error) {
       console.error('PDF text extraction error:', error);
-      throw new Error('Failed to extract text from PDF. The file may be corrupted or password-protected.');
+      throw new Error('Failed to extract text from PDF. The file may be corrupted, password-protected, or contain only images.');
     }
   }
   

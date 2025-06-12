@@ -1,4 +1,3 @@
-
 import { EncryptionService, EncryptionKey } from './encryption';
 import { AadhaarService, AadhaarDetails, EncryptedAadhaarData } from './aadhaarService';
 
@@ -53,13 +52,34 @@ export class PasswordStorageService {
       const encryptedData = localStorage.getItem(storageKey);
       
       if (!encryptedData) {
+        console.log('No encrypted vault data found, returning empty vault');
+        return { passwords: [], lastSync: Date.now() };
+      }
+      
+      // Validate the encryption key
+      if (!encryptionKey || !encryptionKey.key || !encryptionKey.salt) {
+        console.error('Invalid encryption key provided');
         return { passwords: [], lastSync: Date.now() };
       }
       
       const decryptedData = EncryptionService.decrypt(encryptedData, encryptionKey);
-      return JSON.parse(decryptedData);
+      const vault = JSON.parse(decryptedData);
+      
+      // Validate vault structure
+      if (!vault || typeof vault !== 'object') {
+        throw new Error('Invalid vault data structure');
+      }
+      
+      return {
+        passwords: Array.isArray(vault.passwords) ? vault.passwords : [],
+        lastSync: vault.lastSync || Date.now(),
+        aadhaarData: vault.aadhaarData,
+        userEmail: vault.userEmail
+      };
     } catch (error) {
       console.error('Error decrypting vault:', error);
+      // Instead of throwing an error, return an empty vault
+      // This prevents the app from crashing when there's corrupted data
       return { passwords: [], lastSync: Date.now() };
     }
   }
@@ -95,31 +115,36 @@ export class PasswordStorageService {
   }
 
   static exportVault(userId: string, encryptionKey: EncryptionKey): void {
-    // Export the encrypted vault data directly from localStorage
-    const storageKey = this.getStorageKey(userId);
-    const encryptedVaultData = localStorage.getItem(storageKey);
-    
-    if (!encryptedVaultData) {
-      throw new Error('No vault data found to export');
+    try {
+      // Export the encrypted vault data directly from localStorage
+      const storageKey = this.getStorageKey(userId);
+      const encryptedVaultData = localStorage.getItem(storageKey);
+      
+      if (!encryptedVaultData) {
+        throw new Error('No vault data found to export');
+      }
+
+      // Create export object with encrypted data
+      const exportData = {
+        encryptedVault: encryptedVaultData,
+        exportDate: new Date().toISOString(),
+        version: '1.0',
+        // Include a warning about the need for decryption key
+        warning: 'This file contains encrypted data. You will need your decryption key to access the passwords.'
+      };
+
+      const dataStr = JSON.stringify(exportData, null, 2);
+      const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+      
+      const exportFileDefaultName = `encrypted-vault-${new Date().toISOString().split('T')[0]}.json`;
+      const linkElement = document.createElement('a');
+      linkElement.setAttribute('href', dataUri);
+      linkElement.setAttribute('download', exportFileDefaultName);
+      linkElement.click();
+    } catch (error) {
+      console.error('Export error:', error);
+      throw error;
     }
-
-    // Create export object with encrypted data
-    const exportData = {
-      encryptedVault: encryptedVaultData,
-      exportDate: new Date().toISOString(),
-      version: '1.0',
-      // Include a warning about the need for decryption key
-      warning: 'This file contains encrypted data. You will need your decryption key to access the passwords.'
-    };
-
-    const dataStr = JSON.stringify(exportData, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-    
-    const exportFileDefaultName = `encrypted-vault-${new Date().toISOString().split('T')[0]}.json`;
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
   }
 
   static generatePassword(length: number = 16, includeSpecial: boolean = true): string {
