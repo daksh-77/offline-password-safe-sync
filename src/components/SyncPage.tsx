@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Cloud, CloudDownload, CloudUpload, RefreshCw, ArrowLeft, Wifi, WifiOff } from 'lucide-react';
+import { Cloud, CloudDownload, CloudUpload, RefreshCw, ArrowLeft, Wifi, WifiOff, AlertCircle } from 'lucide-react';
 import { DriveService } from '@/lib/driveService';
 import { useAuth } from './AuthProvider';
 import { useToast } from '@/hooks/use-toast';
@@ -19,6 +18,7 @@ const SyncPage: React.FC<SyncPageProps> = ({ encryptionKey, onBack }) => {
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
     loadLastSyncTime();
@@ -39,8 +39,12 @@ const SyncPage: React.FC<SyncPageProps> = ({ encryptionKey, onBack }) => {
     try {
       const syncTime = await DriveService.getLastSyncTime();
       setLastSyncTime(syncTime);
-    } catch (error) {
+      setAuthError(null);
+    } catch (error: any) {
       console.error('Error loading sync time:', error);
+      if (error.message.includes('access token')) {
+        setAuthError('Google Drive access expired. Please sign out and sign in again.');
+      }
     }
   };
 
@@ -48,6 +52,8 @@ const SyncPage: React.FC<SyncPageProps> = ({ encryptionKey, onBack }) => {
     if (!user || !isOnline) return;
 
     setIsSyncing(true);
+    setAuthError(null);
+    
     try {
       const vault = PasswordStorageService.getVault(user.uid, encryptionKey);
       const vaultData = JSON.stringify(vault);
@@ -60,12 +66,22 @@ const SyncPage: React.FC<SyncPageProps> = ({ encryptionKey, onBack }) => {
         title: "Success",
         description: "Vault uploaded to Google Drive successfully",
       });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to upload vault to Google Drive",
-        variant: "destructive",
-      });
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      if (error.message.includes('access token') || error.message.includes('401')) {
+        setAuthError('Google Drive access expired. Please sign out and sign in again to restore sync functionality.');
+        toast({
+          title: "Authentication Error",
+          description: "Please sign out and sign in again to restore Google Drive access",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to upload vault to Google Drive",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsSyncing(false);
     }
@@ -75,6 +91,8 @@ const SyncPage: React.FC<SyncPageProps> = ({ encryptionKey, onBack }) => {
     if (!user || !isOnline) return;
 
     setIsSyncing(true);
+    setAuthError(null);
+    
     try {
       const fileName = `vault_${user.uid}.json`;
       const vaultData = await DriveService.downloadVaultFromDrive(fileName);
@@ -86,12 +104,22 @@ const SyncPage: React.FC<SyncPageProps> = ({ encryptionKey, onBack }) => {
         title: "Success",
         description: "Vault downloaded from Google Drive successfully",
       });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to download vault from Google Drive",
-        variant: "destructive",
-      });
+    } catch (error: any) {
+      console.error('Download error:', error);
+      if (error.message.includes('access token') || error.message.includes('401')) {
+        setAuthError('Google Drive access expired. Please sign out and sign in again to restore sync functionality.');
+        toast({
+          title: "Authentication Error",
+          description: "Please sign out and sign in again to restore Google Drive access",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to download vault from Google Drive",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsSyncing(false);
     }
@@ -113,6 +141,19 @@ const SyncPage: React.FC<SyncPageProps> = ({ encryptionKey, onBack }) => {
             <p className="text-muted-foreground">Manage your Google Drive backups</p>
           </div>
         </div>
+
+        {/* Authentication Error Alert */}
+        {authError && (
+          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-6">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-destructive mt-0.5" />
+              <div>
+                <h3 className="font-medium text-destructive mb-1">Authentication Required</h3>
+                <p className="text-sm text-destructive">{authError}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Connection Status */}
         <div className="bg-card rounded-lg p-6 mb-6">
@@ -154,7 +195,7 @@ const SyncPage: React.FC<SyncPageProps> = ({ encryptionKey, onBack }) => {
             <div className="flex justify-between items-center py-2">
               <span className="text-sm font-medium">Status</span>
               <span className="text-sm text-muted-foreground">
-                {isOnline ? 'Ready to sync' : 'Offline'}
+                {authError ? 'Authentication required' : isOnline ? 'Ready to sync' : 'Offline'}
               </span>
             </div>
           </div>
@@ -167,7 +208,7 @@ const SyncPage: React.FC<SyncPageProps> = ({ encryptionKey, onBack }) => {
           <div className="space-y-3">
             <Button
               onClick={handleManualSync}
-              disabled={isSyncing || !isOnline}
+              disabled={isSyncing || !isOnline || !!authError}
               className="w-full justify-start"
             >
               {isSyncing ? (
@@ -180,7 +221,7 @@ const SyncPage: React.FC<SyncPageProps> = ({ encryptionKey, onBack }) => {
             
             <Button
               onClick={handleDownloadFromCloud}
-              disabled={isSyncing || !isOnline}
+              disabled={isSyncing || !isOnline || !!authError}
               variant="outline"
               className="w-full justify-start"
             >
@@ -189,9 +230,10 @@ const SyncPage: React.FC<SyncPageProps> = ({ encryptionKey, onBack }) => {
             </Button>
           </div>
           
-          {!isOnline && (
+          {(!isOnline || authError) && (
             <p className="text-xs text-muted-foreground mt-4 text-center">
-              Sync features require an internet connection
+              {!isOnline ? 'Sync features require an internet connection' : 
+               'Please resolve authentication issues to use sync features'}
             </p>
           )}
         </div>

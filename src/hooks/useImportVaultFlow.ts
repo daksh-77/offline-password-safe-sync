@@ -1,4 +1,3 @@
-
 import { PasswordStorageService } from '@/lib/passwordStorage';
 import { EncryptionKey } from '@/lib/encryption';
 import { AadhaarService, AadhaarDetails } from '@/lib/aadhaarService';
@@ -56,15 +55,37 @@ export const useImportVaultFlow = ({
       const vaultText = await vaultFile.text();
       const keyText = await keyFile.text();
       
-      const vault = JSON.parse(vaultText);
-      const encryptionKey: EncryptionKey = JSON.parse(keyText);
-
-      // Test decryption
-      const testDecrypt = PasswordStorageService.getVault(user!.uid, encryptionKey);
+      // Parse the files
+      let vault, encryptionKey: EncryptionKey;
       
-      // Save vault to user's storage
+      try {
+        vault = JSON.parse(vaultText);
+        encryptionKey = JSON.parse(keyText);
+      } catch (parseError) {
+        throw new Error('Invalid file format. Please check your vault and key files.');
+      }
+
+      // Validate encryption key structure
+      if (!encryptionKey.key || !encryptionKey.salt || !encryptionKey.timestamp) {
+        throw new Error('Invalid encryption key file format.');
+      }
+
+      // Test decryption by trying to decrypt the vault
       if (user) {
-        localStorage.setItem(`vault_${user.uid}`, vaultText);
+        // First, save the encrypted vault data
+        if (vault.encryptedVault) {
+          // This is an exported vault with encrypted data
+          localStorage.setItem(`vault_${user.uid}`, vault.encryptedVault);
+        } else {
+          // This might be raw vault data, encrypt it first
+          const vaultData = JSON.stringify(vault);
+          localStorage.setItem(`vault_${user.uid}`, vaultData);
+        }
+        
+        // Test if we can decrypt it
+        const testVault = PasswordStorageService.getVault(user.uid, encryptionKey);
+        
+        // If we get here, decryption worked
         localStorage.setItem(`encryption_key_${user.uid}`, keyText);
       }
 
@@ -74,9 +95,9 @@ export const useImportVaultFlow = ({
         title: "Success",
         description: "Vault imported successfully",
       });
-    } catch (error) {
-      onError('Failed to import vault. Please check your files.');
+    } catch (error: any) {
       console.error('Import error:', error);
+      onError(error.message || 'Failed to import vault. Please check your files.');
     } finally {
       setIsImporting(false);
     }

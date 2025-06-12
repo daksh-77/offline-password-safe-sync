@@ -1,4 +1,3 @@
-
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 
@@ -22,3 +21,10 @@ export const googleProvider = new GoogleAuthProvider();
 // Add the required scopes for Google Drive access
 googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
 googleProvider.addScope('https://www.googleapis.com/auth/userinfo.profile');
+googleProvider.addScope('https://www.googleapis.com/auth/userinfo.email');
+
+// Set custom parameters to force account selection and consent
+googleProvider.setCustomParameters({
+  prompt: 'consent',
+  access_type: 'offline'
+});

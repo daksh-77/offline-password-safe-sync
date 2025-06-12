@@ -1,4 +1,3 @@
-
 import CryptoJS from 'crypto-js';
 
 export interface EncryptionKey {
@@ -25,8 +24,12 @@ export class EncryptionService {
         iterations: 1000
       });
       
-      const encrypted = CryptoJS.AES.encrypt(data, key.toString()).toString();
-      return encrypted;
+      const iv = CryptoJS.lib.WordArray.random(128/8);
+      const encrypted = CryptoJS.AES.encrypt(data, key, { iv: iv });
+      
+      // Combine IV and encrypted data
+      const combined = iv.concat(encrypted.ciphertext);
+      return combined.toString(CryptoJS.enc.Base64);
     } catch (error) {
       console.error('Encryption error:', error);
       throw new Error('Failed to encrypt data');
@@ -45,7 +48,16 @@ export class EncryptionService {
         iterations: 1000
       });
       
-      const decrypted = CryptoJS.AES.decrypt(encryptedData, key.toString());
+      // Parse the combined data
+      const combined = CryptoJS.enc.Base64.parse(encryptedData);
+      const iv = CryptoJS.lib.WordArray.create(combined.words.slice(0, 4));
+      const ciphertext = CryptoJS.lib.WordArray.create(combined.words.slice(4));
+      
+      const decrypted = CryptoJS.AES.decrypt(
+        { ciphertext: ciphertext },
+        key,
+        { iv: iv }
+      );
       
       if (!decrypted || decrypted.sigBytes <= 0) {
         throw new Error('Invalid encrypted data or wrong key');
