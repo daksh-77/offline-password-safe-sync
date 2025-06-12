@@ -1,7 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from '@/components/AuthProvider';
 import { ThemeProvider } from '@/contexts/ThemeContext';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import LoginScreen from '@/components/LoginScreen';
 import KeyDownloadDialog from '@/components/KeyDownloadDialog';
 import PasswordDashboard from '@/components/PasswordDashboard';
@@ -30,8 +30,16 @@ const AppContent = () => {
       const savedVault = localStorage.getItem(`vault_${user.uid}`);
       
       if (savedKey && savedVault) {
-        setEncryptionKey(JSON.parse(savedKey));
-        setAppState('dashboard');
+        try {
+          setEncryptionKey(JSON.parse(savedKey));
+          setAppState('dashboard');
+        } catch (error) {
+          console.error('Error parsing saved encryption key:', error);
+          // Clear invalid data
+          localStorage.removeItem(`encryption_key_${user.uid}`);
+          localStorage.removeItem(`vault_${user.uid}`);
+          setAppState('import-create');
+        }
       } else {
         setAppState('import-create');
       }
@@ -161,11 +169,13 @@ const AppContent = () => {
 
 const Index = () => {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 };
 
