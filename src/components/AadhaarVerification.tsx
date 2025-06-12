@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Upload, FileText, AlertCircle, CheckCircle, ArrowLeft, Edit } from 'lucide-react';
@@ -11,13 +10,15 @@ interface AadhaarVerificationProps {
   onCancel?: () => void;
   title?: string;
   description?: string;
+  isLoading?: boolean;
 }
 
 const AadhaarVerification: React.FC<AadhaarVerificationProps> = ({
   onVerificationComplete,
   onCancel,
   title = "Aadhaar Verification",
-  description = "Upload your Aadhaar PDF for verification"
+  description = "Upload your Aadhaar PDF for verification",
+  isLoading = false
 }) => {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -38,10 +39,10 @@ const AadhaarVerification: React.FC<AadhaarVerificationProps> = ({
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) { // 10MB limit
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit for Aadhaar PDFs
       toast({
         title: "File Too Large",
-        description: "Please upload a file smaller than 10MB",
+        description: "Aadhaar PDFs should be under 5MB. Please upload a valid Aadhaar document.",
         variant: "destructive",
       });
       return;
@@ -60,7 +61,9 @@ const AadhaarVerification: React.FC<AadhaarVerificationProps> = ({
       
       console.log('Aadhaar details extracted:', { 
         name: details.name, 
-        aadhaarNumber: details.aadhaarNumber.slice(-4) // Log only last 4 digits for security
+        aadhaarNumber: `****-****-${details.aadhaarNumber.slice(-4)}`,
+        dob: details.dob,
+        gender: details.gender
       });
 
       setExtractedDetails(details);
@@ -68,14 +71,14 @@ const AadhaarVerification: React.FC<AadhaarVerificationProps> = ({
       
       toast({
         title: "Verification Successful",
-        description: "Aadhaar details extracted successfully",
+        description: "Aadhaar details extracted successfully from the PDF",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Aadhaar verification failed:', error);
       setVerificationStep('upload');
       toast({
         title: "PDF Processing Failed",
-        description: "Could not extract details from PDF. You can enter them manually instead.",
+        description: error.message || "Could not extract details from PDF. Please ensure it's a valid Aadhaar document or enter details manually.",
         variant: "destructive",
       });
     } finally {
@@ -122,6 +125,7 @@ const AadhaarVerification: React.FC<AadhaarVerificationProps> = ({
             variant="outline"
             size="sm"
             className="mb-4"
+            disabled={isLoading}
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
@@ -139,7 +143,7 @@ const AadhaarVerification: React.FC<AadhaarVerificationProps> = ({
         {verificationStep === 'upload' && (
           <div className="space-y-4">
             <Button
-              disabled={isProcessing}
+              disabled={isProcessing || isLoading}
               onClick={triggerFileInput}
               className="w-full bg-primary hover:bg-primary/90"
             >
@@ -160,6 +164,7 @@ const AadhaarVerification: React.FC<AadhaarVerificationProps> = ({
               onClick={() => setVerificationStep('manual')}
               variant="outline"
               className="w-full"
+              disabled={isLoading}
             >
               <Edit className="w-4 h-4 mr-2" />
               Enter Details Manually
@@ -177,12 +182,13 @@ const AadhaarVerification: React.FC<AadhaarVerificationProps> = ({
               <div className="flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5" />
                 <div>
-                  <p className="font-medium mb-1">Security Notice:</p>
+                  <p className="font-medium mb-1">Security & Requirements:</p>
                   <ul className="space-y-1">
                     <li>• Upload only official Aadhaar PDF from UIDAI</li>
                     <li>• File is processed locally on your device</li>
-                    <li>• No data is sent to external servers</li>
-                    <li>• Maximum file size: 10MB</li>
+                    <li>• Maximum file size: 5MB</li>
+                    <li>• PDF must contain clear, readable text</li>
+                    <li>• No password-protected PDFs</li>
                   </ul>
                 </div>
               </div>
@@ -194,7 +200,12 @@ const AadhaarVerification: React.FC<AadhaarVerificationProps> = ({
           <div className="text-center py-8">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
             <h3 className="text-lg font-medium text-foreground mb-2">Processing Aadhaar PDF</h3>
-            <p className="text-muted-foreground">Verifying document integrity and extracting details...</p>
+            <p className="text-muted-foreground">Verifying document and extracting details...</p>
+            <div className="mt-4 text-xs text-muted-foreground">
+              <p>• Checking PDF integrity</p>
+              <p>• Validating Aadhaar document</p>
+              <p>• Extracting required information</p>
+            </div>
           </div>
         )}
 
@@ -203,17 +214,18 @@ const AadhaarVerification: React.FC<AadhaarVerificationProps> = ({
             <div className="text-center">
               <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-foreground mb-2">Verification Successful</h3>
+              <p className="text-sm text-muted-foreground">Aadhaar details extracted successfully</p>
             </div>
 
             <div className="bg-muted p-4 rounded-lg space-y-3">
               <div>
                 <label className="text-sm font-medium text-muted-foreground">Name</label>
-                <p className="text-foreground">{extractedDetails.name}</p>
+                <p className="text-foreground font-medium">{extractedDetails.name}</p>
               </div>
               <div>
                 <label className="text-sm font-medium text-muted-foreground">Aadhaar Number</label>
                 <p className="text-foreground font-mono">
-                  XXXX XXXX {extractedDetails.aadhaarNumber.slice(-4)}
+                  {extractedDetails.aadhaarNumber.replace(/(\d{4})(\d{4})(\d{4})/, '$1 $2 ****')}
                 </p>
               </div>
               {extractedDetails.dob && (
@@ -230,19 +242,34 @@ const AadhaarVerification: React.FC<AadhaarVerificationProps> = ({
               )}
             </div>
 
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+              <p className="text-sm text-green-800">
+                <strong>✓ Document Verified:</strong> This appears to be a valid Aadhaar document with all required information.
+              </p>
+            </div>
+
             <div className="flex gap-3">
               <Button
                 onClick={() => setVerificationStep('upload')}
                 variant="outline"
                 className="flex-1"
+                disabled={isLoading}
               >
                 Upload Different PDF
               </Button>
               <Button
                 onClick={handleConfirmDetails}
                 className="flex-1 bg-primary hover:bg-primary/90"
+                disabled={isLoading}
               >
-                Confirm & Continue
+                {isLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Processing...
+                  </>
+                ) : (
+                  'Confirm & Continue'
+                )}
               </Button>
             </div>
           </div>
