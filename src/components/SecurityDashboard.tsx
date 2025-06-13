@@ -1,11 +1,11 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Shield, AlertTriangle, CheckCircle, RefreshCw, TrendingUp, Eye } from 'lucide-react';
+import { Shield, AlertTriangle, CheckCircle, RefreshCw, TrendingUp, Eye, AlertCircle } from 'lucide-react';
 import { Password } from '@/lib/passwordStorage';
 import { PasswordAnalyzer, SecurityScore } from '@/lib/passwordAnalyzer';
 import { BreachMonitor, BreachSummary, BreachCheckResult } from '@/lib/breachMonitor';
 import { useToast } from '@/hooks/use-toast';
+import { Progress } from '@/components/ui/progress';
 
 interface SecurityDashboardProps {
   passwords: Password[];
@@ -77,7 +77,7 @@ const SecurityDashboard: React.FC<SecurityDashboardProps> = ({
     switch (level) {
       case 'safe': return <CheckCircle className="w-5 h-5 text-green-500" />;
       case 'warning': return <AlertTriangle className="w-5 h-5 text-amber-500" />;
-      case 'danger': return <Shield className="w-5 h-5 text-red-500" />;
+      case 'danger': return <AlertCircle className="w-5 h-5 text-red-500" />;
     }
   };
 
@@ -86,6 +86,15 @@ const SecurityDashboard: React.FC<SecurityDashboardProps> = ({
       case 'safe': return 'border-green-200 bg-green-50';
       case 'warning': return 'border-amber-200 bg-amber-50';
       case 'danger': return 'border-red-200 bg-red-50';
+    }
+  };
+
+  const getRiskLevelColor = (riskLevel: SecurityScore['riskLevel']) => {
+    switch (riskLevel) {
+      case 'Low': return 'text-green-700 bg-green-100';
+      case 'Medium': return 'text-yellow-700 bg-yellow-100';
+      case 'High': return 'text-orange-700 bg-orange-100';
+      case 'Critical': return 'text-red-700 bg-red-100';
     }
   };
 
@@ -104,37 +113,55 @@ const SecurityDashboard: React.FC<SecurityDashboardProps> = ({
       {/* Security Score Overview */}
       {securityScore && (
         <div className="bg-card p-6 rounded-lg border border-border">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-medium text-foreground flex items-center gap-2">
               <TrendingUp className="w-5 h-5" />
-              Security Score
+              Security Overview
             </h3>
-            <div className="text-2xl font-bold text-foreground">
-              {securityScore.avgStrength}/100
+            <div className="flex items-center gap-2">
+              <span className={`px-3 py-1 rounded-full text-sm font-medium ${getRiskLevelColor(securityScore.riskLevel)}`}>
+                {securityScore.riskLevel} Risk
+              </span>
+              <div className="text-2xl font-bold text-foreground">
+                {securityScore.avgStrength}/100
+              </div>
             </div>
           </div>
+
+          {/* Progress Bar */}
+          <div className="mb-6">
+            <div className="flex justify-between text-sm mb-2">
+              <span className="text-muted-foreground">Overall Security Score</span>
+              <span className="font-medium">{securityScore.avgStrength}%</span>
+            </div>
+            <Progress value={securityScore.avgStrength} className="h-3" />
+          </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div className="text-center p-3 bg-green-50 rounded-lg border border-green-200">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="text-center p-4 bg-accent rounded-lg">
+              <div className="text-2xl font-bold text-foreground">{securityScore.totalPasswords}</div>
+              <div className="text-sm text-muted-foreground">Total Passwords</div>
+            </div>
+            <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
               <div className="text-2xl font-bold text-green-700">{securityScore.strongPasswords}</div>
               <div className="text-sm text-green-600">Strong Passwords</div>
             </div>
-            <div className="text-center p-3 bg-amber-50 rounded-lg border border-amber-200">
+            <div className="text-center p-4 bg-amber-50 rounded-lg border border-amber-200">
               <div className="text-2xl font-bold text-amber-700">{securityScore.weakPasswords}</div>
               <div className="text-sm text-amber-600">Weak Passwords</div>
             </div>
-            <div className="text-center p-3 bg-red-50 rounded-lg border border-red-200">
+            <div className="text-center p-4 bg-red-50 rounded-lg border border-red-200">
               <div className="text-2xl font-bold text-red-700">{securityScore.duplicates}</div>
               <div className="text-sm text-red-600">Duplicate Passwords</div>
             </div>
           </div>
 
           <div className="space-y-2">
-            <h4 className="font-medium text-foreground">Recommendations:</h4>
-            <ul className="space-y-1">
+            <h4 className="font-medium text-foreground">Security Recommendations:</h4>
+            <ul className="space-y-2">
               {securityScore.recommendations.map((rec, index) => (
                 <li key={index} className="text-sm text-muted-foreground flex items-start gap-2">
-                  <span className="w-1 h-1 bg-muted-foreground rounded-full mt-2"></span>
+                  <span className="w-1.5 h-1.5 bg-primary rounded-full mt-2 flex-shrink-0"></span>
                   {rec}
                 </li>
               ))}
@@ -173,16 +200,16 @@ const SecurityDashboard: React.FC<SecurityDashboardProps> = ({
         {breachSummary ? (
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-3 bg-muted rounded-lg">
-                <div className="text-lg font-bold text-foreground">{breachSummary.totalChecked}</div>
+              <div className="p-4 bg-accent rounded-lg">
+                <div className="text-2xl font-bold text-foreground">{breachSummary.totalChecked}</div>
                 <div className="text-sm text-muted-foreground">Passwords Checked</div>
               </div>
-              <div className={`p-3 rounded-lg ${
+              <div className={`p-4 rounded-lg ${
                 breachSummary.breachedPasswords > 0 
                   ? 'bg-red-50 border border-red-200' 
                   : 'bg-green-50 border border-green-200'
               }`}>
-                <div className={`text-lg font-bold ${
+                <div className={`text-2xl font-bold ${
                   breachSummary.breachedPasswords > 0 ? 'text-red-700' : 'text-green-700'
                 }`}>
                   {breachSummary.breachedPasswords}
@@ -196,11 +223,11 @@ const SecurityDashboard: React.FC<SecurityDashboardProps> = ({
             </div>
 
             <div className="space-y-2">
-              <h4 className="font-medium text-foreground">Security Recommendations:</h4>
+              <h4 className="font-medium text-foreground">Breach Recommendations:</h4>
               <ul className="space-y-1">
                 {breachSummary.recommendations.map((rec, index) => (
                   <li key={index} className="text-sm text-muted-foreground flex items-start gap-2">
-                    <span className="w-1 h-1 bg-muted-foreground rounded-full mt-2"></span>
+                    <span className="w-1.5 h-1.5 bg-primary rounded-full mt-2 flex-shrink-0"></span>
                     {rec}
                   </li>
                 ))}
@@ -241,7 +268,7 @@ const SecurityDashboard: React.FC<SecurityDashboardProps> = ({
               return (
                 <div
                   key={password.id}
-                  className={`p-4 rounded-lg border cursor-pointer hover:shadow-sm transition-shadow ${getSecurityColor(securityLevel)}`}
+                  className={`p-4 rounded-lg border cursor-pointer hover:shadow-sm transition-all ${getSecurityColor(securityLevel)}`}
                   onClick={() => onPasswordSelect?.(password.id)}
                 >
                   <div className="flex items-center justify-between">
@@ -256,12 +283,20 @@ const SecurityDashboard: React.FC<SecurityDashboardProps> = ({
                       <div className="text-sm font-medium text-foreground">
                         Strength: {analysis.score}/100
                       </div>
+                      <div className="text-xs text-muted-foreground">
+                        {analysis.level}
+                      </div>
                       {breachResult?.isBreached && (
-                        <div className="text-xs text-red-600">
+                        <div className="text-xs text-red-600 font-medium">
                           Found in {breachResult.breachCount.toLocaleString()} breaches
                         </div>
                       )}
                     </div>
+                  </div>
+                  
+                  {/* Progress bar for password strength */}
+                  <div className="mt-3">
+                    <Progress value={analysis.score} className="h-2" />
                   </div>
                 </div>
               );

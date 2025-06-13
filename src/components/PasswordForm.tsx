@@ -1,12 +1,13 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Eye, EyeOff, RefreshCw, Copy, Shield, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, RefreshCw, Copy, Shield, AlertTriangle, Settings } from 'lucide-react';
 import { Password } from '@/lib/passwordStorage';
-import { PasswordStorageService } from '@/lib/passwordStorage';
 import { PasswordAnalyzer } from '@/lib/passwordAnalyzer';
 import { BreachMonitor } from '@/lib/breachMonitor';
 import { useToast } from '@/hooks/use-toast';
+import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 interface PasswordFormProps {
   password?: Password | null;
@@ -28,6 +29,16 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSave, onCancel 
   const [passwordAnalysis, setPasswordAnalysis] = useState<any>(null);
   const [isCheckingBreach, setIsCheckingBreach] = useState(false);
   const [breachStatus, setBreachStatus] = useState<'safe' | 'warning' | 'danger'>('safe');
+  const [showGenerator, setShowGenerator] = useState(false);
+  const [generatorOptions, setGeneratorOptions] = useState({
+    length: 16,
+    includeUppercase: true,
+    includeLowercase: true,
+    includeNumbers: true,
+    includeSymbols: true,
+    excludeSimilar: true,
+    excludeAmbiguous: true
+  });
 
   useEffect(() => {
     if (password) {
@@ -79,12 +90,20 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSave, onCancel 
   };
 
   const generateRandomPassword = () => {
-    const newPassword = PasswordStorageService.generatePassword(16, true);
-    setFormData(prev => ({ ...prev, password: newPassword }));
-    toast({
-      title: "Password Generated",
-      description: "A strong password has been generated for you",
-    });
+    try {
+      const newPassword = PasswordAnalyzer.generateSecurePassword(generatorOptions);
+      setFormData(prev => ({ ...prev, password: newPassword }));
+      toast({
+        title: "Password Generated",
+        description: "A strong password has been generated for you",
+      });
+    } catch (error) {
+      toast({
+        title: "Generation Error",
+        description: "Failed to generate password. Please check your settings.",
+        variant: "destructive",
+      });
+    }
   };
 
   const copyPassword = async () => {
@@ -113,6 +132,14 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSave, onCancel 
         variant: "destructive",
       });
       return;
+    }
+
+    // Warn about weak passwords
+    if (passwordAnalysis && passwordAnalysis.score < 50) {
+      const proceed = window.confirm(
+        'This password is considered weak. Are you sure you want to save it? Consider generating a stronger password.'
+      );
+      if (!proceed) return;
     }
 
     const passwordData: Password = {
@@ -155,10 +182,10 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSave, onCancel 
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <div className="max-w-2xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-lg shadow-sm">
-          <div className="px-6 py-4 border-b border-gray-200">
+        <div className="bg-card rounded-lg shadow-sm border border-border">
+          <div className="px-6 py-4 border-b border-border">
             <div className="flex items-center gap-3">
               <Button
                 onClick={onCancel}
@@ -167,7 +194,7 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSave, onCancel 
               >
                 <ArrowLeft className="w-4 h-4" />
               </Button>
-              <h1 className="text-xl font-semibold text-gray-900">
+              <h1 className="text-xl font-semibold text-foreground">
                 {password ? 'Edit Password' : 'Add New Password'}
               </h1>
             </div>
@@ -176,7 +203,7 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSave, onCancel 
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="name" className="block text-sm font-medium text-foreground mb-2">
                   Name *
                 </label>
                 <input
@@ -186,13 +213,13 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSave, onCancel 
                   value={formData.name}
                   onChange={handleInputChange}
                   placeholder="e.g., Gmail, Facebook, Bank Account"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-ring focus:border-ring bg-background text-foreground"
                   required
                 />
               </div>
 
               <div>
-                <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="category" className="block text-sm font-medium text-foreground mb-2">
                   Category
                 </label>
                 <select
@@ -200,7 +227,7 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSave, onCancel 
                   name="category"
                   value={formData.category}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-ring focus:border-ring bg-background text-foreground"
                 >
                   <option value="Personal">Personal</option>
                   <option value="Work">Work</option>
@@ -214,7 +241,7 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSave, onCancel 
             </div>
 
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="username" className="block text-sm font-medium text-foreground mb-2">
                 Username/Email *
               </label>
               <input
@@ -224,15 +251,27 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSave, onCancel 
                 value={formData.username}
                 onChange={handleInputChange}
                 placeholder="Enter username or email"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-ring focus:border-ring bg-background text-foreground"
                 required
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                Password *
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label htmlFor="password" className="block text-sm font-medium text-foreground">
+                  Password *
+                </label>
+                <Button
+                  type="button"
+                  onClick={() => setShowGenerator(!showGenerator)}
+                  variant="ghost"
+                  size="sm"
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  Generator
+                </Button>
+              </div>
+              
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
@@ -241,14 +280,14 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSave, onCancel 
                   value={formData.password}
                   onChange={handleInputChange}
                   placeholder="Enter password"
-                  className="w-full px-3 py-2 pr-20 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 pr-20 border border-input rounded-lg focus:ring-2 focus:ring-ring focus:border-ring bg-background text-foreground"
                   required
                 />
                 <div className="absolute inset-y-0 right-0 flex items-center gap-1 pr-3">
                   <button
                     type="button"
                     onClick={copyPassword}
-                    className="text-gray-400 hover:text-gray-600"
+                    className="text-muted-foreground hover:text-foreground"
                     title="Copy password"
                   >
                     <Copy className="w-4 h-4" />
@@ -256,12 +295,98 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSave, onCancel 
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="text-gray-400 hover:text-gray-600"
+                    className="text-muted-foreground hover:text-foreground"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
+
+              {/* Password Generator */}
+              {showGenerator && (
+                <div className="mt-4 p-4 bg-accent rounded-lg border border-border">
+                  <h4 className="font-medium text-foreground mb-3">Password Generator</h4>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <Label className="text-sm font-medium">Length: {generatorOptions.length}</Label>
+                      <Slider
+                        value={[generatorOptions.length]}
+                        onValueChange={(value) => setGeneratorOptions(prev => ({ ...prev, length: value[0] }))}
+                        max={50}
+                        min={8}
+                        step={1}
+                        className="mt-2"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="uppercase"
+                          checked={generatorOptions.includeUppercase}
+                          onCheckedChange={(checked) => setGeneratorOptions(prev => ({ ...prev, includeUppercase: checked }))}
+                        />
+                        <Label htmlFor="uppercase" className="text-sm">Uppercase (A-Z)</Label>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="lowercase"
+                          checked={generatorOptions.includeLowercase}
+                          onCheckedChange={(checked) => setGeneratorOptions(prev => ({ ...prev, includeLowercase: checked }))}
+                        />
+                        <Label htmlFor="lowercase" className="text-sm">Lowercase (a-z)</Label>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="numbers"
+                          checked={generatorOptions.includeNumbers}
+                          onCheckedChange={(checked) => setGeneratorOptions(prev => ({ ...prev, includeNumbers: checked }))}
+                        />
+                        <Label htmlFor="numbers" className="text-sm">Numbers (0-9)</Label>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="symbols"
+                          checked={generatorOptions.includeSymbols}
+                          onCheckedChange={(checked) => setGeneratorOptions(prev => ({ ...prev, includeSymbols: checked }))}
+                        />
+                        <Label htmlFor="symbols" className="text-sm">Symbols (!@#$)</Label>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="excludeSimilar"
+                          checked={generatorOptions.excludeSimilar}
+                          onCheckedChange={(checked) => setGeneratorOptions(prev => ({ ...prev, excludeSimilar: checked }))}
+                        />
+                        <Label htmlFor="excludeSimilar" className="text-sm">Exclude similar</Label>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="excludeAmbiguous"
+                          checked={generatorOptions.excludeAmbiguous}
+                          onCheckedChange={(checked) => setGeneratorOptions(prev => ({ ...prev, excludeAmbiguous: checked }))}
+                        />
+                        <Label htmlFor="excludeAmbiguous" className="text-sm">Exclude ambiguous</Label>
+                      </div>
+                    </div>
+
+                    <Button
+                      type="button"
+                      onClick={generateRandomPassword}
+                      className="w-full"
+                    >
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Generate Password
+                    </Button>
+                  </div>
+                </div>
+              )}
               
               {/* Password Analysis */}
               {formData.password && passwordAnalysis && (
@@ -269,7 +394,7 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSave, onCancel 
                   {/* Strength Meter */}
                   <div>
                     <div className="flex items-center justify-between text-sm mb-1">
-                      <span className="text-gray-600">Password strength:</span>
+                      <span className="text-muted-foreground">Password strength:</span>
                       <span className={`font-medium ${
                         passwordAnalysis.score < 30 ? 'text-red-600' :
                         passwordAnalysis.score < 60 ? 'text-yellow-600' :
@@ -278,7 +403,7 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSave, onCancel 
                         {passwordAnalysis.level} ({passwordAnalysis.score}/100)
                       </span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="w-full bg-muted rounded-full h-2">
                       <div 
                         className={`h-2 rounded-full transition-all ${getStrengthColor()}`}
                         style={{ width: `${passwordAnalysis.score}%` }}
@@ -286,9 +411,16 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSave, onCancel 
                     </div>
                   </div>
 
-                  {/* Crack Time */}
-                  <div className="text-sm text-gray-600">
-                    <strong>Estimated crack time:</strong> {passwordAnalysis.estimatedCrackTime}
+                  {/* Entropy and Crack Time */}
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Entropy:</span>
+                      <span className="ml-2 font-medium">{Math.round(passwordAnalysis.entropy)} bits</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Crack time:</span>
+                      <span className="ml-2 font-medium">{passwordAnalysis.estimatedCrackTime}</span>
+                    </div>
                   </div>
 
                   {/* Breach Status */}
@@ -308,12 +440,12 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSave, onCancel 
 
                   {/* Feedback */}
                   {passwordAnalysis.feedback.length > 0 && (
-                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                      <h4 className="text-sm font-medium text-blue-800 mb-2">Suggestions:</h4>
-                      <ul className="text-sm text-blue-700 space-y-1">
+                    <div className="bg-accent p-3 rounded-lg border border-border">
+                      <h4 className="text-sm font-medium text-foreground mb-2">Suggestions:</h4>
+                      <ul className="text-sm text-muted-foreground space-y-1">
                         {passwordAnalysis.feedback.map((feedback: string, index: number) => (
                           <li key={index} className="flex items-start gap-1">
-                            <span className="w-1 h-1 bg-blue-500 rounded-full mt-2"></span>
+                            <span className="w-1 h-1 bg-primary rounded-full mt-2"></span>
                             {feedback}
                           </li>
                         ))}
@@ -322,21 +454,10 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSave, onCancel 
                   )}
                 </div>
               )}
-
-              <Button
-                type="button"
-                onClick={generateRandomPassword}
-                variant="outline"
-                size="sm"
-                className="mt-2"
-              >
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Generate Strong Password
-              </Button>
             </div>
 
             <div>
-              <label htmlFor="url" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="url" className="block text-sm font-medium text-foreground mb-2">
                 Website URL
               </label>
               <input
@@ -346,12 +467,12 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSave, onCancel 
                 value={formData.url}
                 onChange={handleInputChange}
                 placeholder="https://example.com"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-ring focus:border-ring bg-background text-foreground"
               />
             </div>
 
             <div>
-              <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="notes" className="block text-sm font-medium text-foreground mb-2">
                 Notes
               </label>
               <textarea
@@ -361,11 +482,11 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSave, onCancel 
                 onChange={handleInputChange}
                 placeholder="Additional notes or security questions..."
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-input rounded-lg focus:ring-2 focus:ring-ring focus:border-ring bg-background text-foreground"
               />
             </div>
 
-            <div className="flex justify-end gap-3 pt-6 border-t border-gray-200">
+            <div className="flex justify-end gap-3 pt-6 border-t border-border">
               <Button
                 type="button"
                 onClick={onCancel}
@@ -375,7 +496,7 @@ const PasswordForm: React.FC<PasswordFormProps> = ({ password, onSave, onCancel 
               </Button>
               <Button
                 type="submit"
-                className="bg-blue-600 hover:bg-blue-700"
+                className="bg-primary hover:bg-primary/90"
               >
                 {password ? 'Update Password' : 'Save Password'}
               </Button>
